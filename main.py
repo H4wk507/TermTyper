@@ -6,38 +6,18 @@ import curses.ascii
 from random import sample
 import time
 import os
+from util import (is_backspace, is_arrow, is_resize, is_ignored_key, is_enter,
+                  is_tab, is_escape, is_ctrl_r)
 
 os.environ.setdefault("ESCDELAY", "0")
 WHITE = 1
 RED = 2
 
 
-def is_backspace(key: str) -> bool:
-    return key in ("KEY_BACKSPACE", "\b", "\x7f", curses.KEY_BACKSPACE, curses.KEY_DC)
+class Typer:
 
-
-def is_arrow(key: str) -> bool:
-    return key in ("KEY_LEFT", "KEY_RIGHT", "KEY_UP", "KEY_DOWN")
-
-
-def is_resize(key: str) -> bool:
-    return key == "KEY_RESIZE"
-
-
-def is_ignored_key(key: str) -> bool:
-    return isinstance(key, int)
-
-
-def is_enter(key: str) -> bool:
-    return key == "\n"
-
-
-def is_tab(key: str) -> bool:
-    return key == "\t"
-
-
-def is_escape(key: str) -> bool:
-    return ord(key) == curses.ascii.ESC
+    def __init__():
+        pass
 
 
 def get_random_words(wordlist: list["str"], amount: int) -> list["str"]:
@@ -65,24 +45,35 @@ def word_wrap(text: str, width: int) -> str:
         index = text[:index].rfind(" ")
         space_count = line * width - index
         space_string = " " * space_count
-        text = text[:index] + space_string + text[index + 1 :]
+        text = text[:index] + space_string + text[index + 1:]
 
     return text
 
 
-def calculate_wpm(words: list["str"], start_time: float) -> int:
+def calculate_cpm(current: list['str'], start_time: float) -> float:
+    time_taken = (time.time() - start_time) / 60
+    return round(len(current) / time_taken, 1)
+
+
+def calculate_wpm(words: list["str"], start_time: float) -> float:
     """Return typing speed in words per minute
 
     Args:
         words: List of words from sample text.
-        start_time: The time when user starts typing the text.
+        start_time: The time when user starts typing the text in seconds.
 
     Return:
         Speed in words per minute.
     """
 
-    time_taken = time.time() - start_time
-    return round(len(words) / time_taken)
+    time_taken = (time.time() - start_time) / 60
+    return round(len(words) / time_taken, 1)
+
+
+def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
+    """Return accuracy as % between 0 and 100"""
+    correctly_typed = chars_typed - wrongly_typed
+    return round(correctly_typed / max(chars_typed, 1) * 100, 1)
 
 
 def fill_spaces(idx: int, current: list["str"], target: str):
@@ -90,6 +81,13 @@ def fill_spaces(idx: int, current: list["str"], target: str):
         current.append(" ")
         idx += 1
     return idx
+
+
+def init_ncurses(stdscr) -> None:
+    curses.noecho()
+    curses.cbreak()
+    stdscr.nodelay(True)
+    stdscr.timeout(100)
 
 
 def init_colors() -> None:
@@ -100,50 +98,65 @@ def init_colors() -> None:
     curses.init_pair(RED, WHITE, RED)
 
 
-def load_text() -> str:
+def load_random_text() -> str:
     """Load random text from json file."""
     with open("words.json") as f:
         dat = json.load(f)
 
     wordlist = dat["words"]
-    number_of_words = 50
+    number_of_words = 20
     words = get_random_words(wordlist, number_of_words)
     return " ".join(words)
 
 
-def display_text(stdscr, target: str, current: list["str"], lines: int, cpm: int):
-    """Display target text, wpm and the text that the user is currently writing."""
+def display_text(
+    stdscr,
+    target: str,
+    current: list["str"],
+    lines: int,
+    cpm: int,
+    wpm: int,
+    start_time: float,
+    has_started: bool,
+) -> None:
+    """Display target text, WPM, CPM, time elapsed since the beginning and
+    the text that the user is currently writing."""
     stdscr.addstr(target, curses.color_pair(WHITE) | curses.A_BOLD)
-    stdscr.addstr(lines + 1, 0, f"CPM: {cpm}")
+    stdscr.addstr(lines + 1, 0, "esc quit")
+    if not has_started:
+        stdscr.addstr(lines + 1, 8, " | ctrl+r generate new text.")
+    stdscr.addstr(lines + 2, 0, f"CPM: {cpm}")
+    stdscr.addstr(lines + 3, 0, f"WPM: {wpm}")
+    stdscr.addstr(lines + 4, 0, f"time: {round(time.time() - start_time, 2)}s")
     stdscr.move(0, 0)
 
     width = stdscr.getmaxyx()[1]
     line = 0
-    i = 0
-    while i < len(current):
-
+    for i in range(len(current)):
         if current[i] == target[i]:
-            stdscr.addstr(
-                line, i % width, target[i], curses.color_pair(WHITE) | curses.A_DIM
-            )
+            stdscr.addstr(line, i % width, target[i],
+                          curses.color_pair(WHITE) | curses.A_DIM)
         else:
             stdscr.addstr(line, i % width, target[i], curses.color_pair(RED))
 
         if i % width == width - 1:
             line += 1
-        i += 1
 
 
-def start_typing_test(
-    stdscr, current_text: list["str"], target: str, lines: int
-) -> None:
+def start_typing_test(stdscr, current_text: list["str"], target: str,
+                      lines: int) -> None:
     start_time = time.time()
+    has_started = False
     while True:
-        time_elapsed = max(time.time() - start_time, 1)
-        cpm = round((len(current_text) / (time_elapsed / 60)))
+        if current_text == []:
+            start_time = time.time()
 
-        stdscr.clear()
-        display_text(stdscr, target, current_text, lines, cpm)
+        cpm = calculate_cpm(current_text, start_time)
+        wpm = calculate_wpm("".join(current_text).split(), start_time)
+
+        stdscr.erase()  # <- fixes flicker
+        display_text(stdscr, target, current_text, lines, cpm, wpm, start_time,
+                     has_started)
         stdscr.refresh()
 
         if "".join(current_text) == target:
@@ -155,48 +168,62 @@ def start_typing_test(
         except:
             continue
 
-        if current_text == []:
-            start_time = time.time()
+        if is_ctrl_r(c) and not has_started:
+            width = stdscr.getmaxyx()[1]
+            target = load_random_text()
+            lines = get_number_of_lines(target, width)
+            target = word_wrap(target, width)
 
-        if is_backspace(c):
+        elif (is_arrow(c) or is_resize(c) or is_ignored_key(c) or is_enter(c)
+              or is_tab(c)):
+            continue
+
+        elif is_backspace(c):
             if len(current_text) > 0:
                 current_text.pop()
-        elif (
-            is_arrow(c) or is_resize(c) or is_ignored_key(c) or is_enter(c) or is_tab(c)
-        ):
-            continue
+
         elif is_escape(c):
+            stdscr.nodelay(False)
             break
 
         elif c == " ":
             fill_spaces(len(current_text), current_text, target)
+
         elif len(current_text) < len(target):
             current_text.append(c)
+            if not has_started:
+                has_started = True
 
 
-def main(stdscr):
-    stdscr.clear()
-    stdscr.refresh()
-    # stdscr.nodelay(True)
-    stdscr.timeout(1000)
-    init_colors()
-
+def play(stdscr) -> str:
     width = stdscr.getmaxyx()[1]
-    # wpm = 0
-    # accuracy = 0
-    # time = 0
-    # consistency = 0
-
-    text = load_text()
+    text = load_random_text()
     lines = get_number_of_lines(text, width)
     text = word_wrap(text, width)
 
     current_text = []
     start_typing_test(stdscr, current_text, text, lines)
 
-    # curs_y, curs_x = stdscr.getyx()
-    stdscr.addstr(lines + 2, 0, "You've completed the text\n")
-    stdscr.getkey()
+    stdscr.addstr(lines + 5, 0, "You've completed the text.\n")
+    stdscr.addstr(lines + 6, 0, "TAB to play again.\n")
+
+    choice = stdscr.getkey()
+    return choice
+
+
+def main(stdscr):
+    stdscr.clear()
+    stdscr.refresh()
+    init_ncurses(stdscr)
+    init_colors()
+
+    # accuracy = 0
+    # consistency = 0
+
+    while True:
+        choice = play(stdscr)
+        if not is_tab(choice):
+            break
 
 
 wrapper(main)
