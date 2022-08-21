@@ -29,10 +29,33 @@ def is_tab(key: str) -> bool:
     return key == "\t"
 
 
+def is_ctrl_c(key: str) -> bool:
+    return key == "\x03"
+
+
 def is_escape(key: str) -> bool:
     if isinstance(key, str) and len(key) == 1:
         return ord(key) == curses.ascii.ESC
     return False
+
+
+def is_null(key: str) -> bool:
+    if isinstance(key, str) and len(key) == 1:
+        return ord(key) == 0
+    return key == ""
+
+
+def is_valid_key(key: str) -> bool:
+    return not (
+        is_backspace(key)
+        or is_arrow(key)
+        or is_resize(key)
+        or is_ignored_key(key)
+        or is_enter(key)
+        or is_tab(key)
+        or is_escape(key)
+        or is_null(key)
+    )
 
 
 def is_ctrl_r(key: str) -> bool:
@@ -106,3 +129,18 @@ def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
     """Return accuracy as a % between 0 and 100"""
     correctly_typed = chars_typed - wrongly_typed
     return round(correctly_typed / max(chars_typed, 1) * 100, 1)
+
+
+def readkey(win):
+    try:
+        key = win.get_wch()
+        if isinstance(key, int):
+            if key in (curses.KEY_BACKSPACE, curses.KEY_DC):
+                return "KEY_BACKSPACE"
+            if key == curses.KEY_RESIZE:
+                return "KEY_RESIZE"
+        return key
+    except curses.error:
+        return ""  # null
+    except KeyboardInterrupt:
+        return "\x03"  # ctrl+c
