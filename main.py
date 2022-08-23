@@ -67,6 +67,7 @@ class Typer:
 
             if self.mode == self.Mode.FIRST_PLAY:
                 self.start_typing_test(win, first_key)
+
             elif self.mode == self.Mode.PLAY_AGAIN:
                 if is_tab(first_key):
                     self.switch_text(win)
@@ -129,7 +130,6 @@ class Typer:
 
     def start_typing_test(self, win, key: str) -> None:
         if not self.started and is_valid_key(key):
-            self.current = [key]
             self.started = True
             self.start_time = time()
 
@@ -137,50 +137,42 @@ class Typer:
             return
 
         # TODO:
-        while True:
-            self.cpm = calculate_cpm(self.current, self.start_time)
-            self.wpm = calculate_wpm("".join(self.current).split(), self.start_time)
-            # self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
+        self.wpm = calculate_wpm("".join(self.current).split(), self.start_time)
+        # self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
 
-            if self.current == []:
-                # When user's text is empty; make sure to reset time.
-                self.start_time = time()
+        if self.current == []:
+            # When user's text is empty; make sure to reset time.
+            self.start_time = time()
 
-            self.print_text(win)
+        self.print_text(win)
 
-            if "".join(self.current) == self.text:
-                win.addstr(self.lines + 5, 0, "You've completed the text.\n")
-                win.addstr(self.lines + 6, 0, "TAB to play again.\n")
-                self.started = False
-                self.mode = self.Mode.PLAY_AGAIN
-                return
+        if "".join(self.current) == self.text:
+            win.addstr(self.lines + 5, 0, "You've completed the text.\n")
+            win.addstr(self.lines + 6, 0, "TAB to play again.\n")
+            self.started = False
+            self.mode = self.Mode.PLAY_AGAIN
+            return
 
-            # TODO: switch win.get_wch() to readkey
-            try:
-                c = win.get_wch()
-            except curses.error:
-                continue
+        if is_escape(key) and not self.started:
+            sys.exit(0)
 
-            if is_escape(c) and not self.started:
-                sys.exit(0)
+        elif is_backspace(key):
+            if len(self.current) > 0:
+                self.current.pop()
 
-            elif is_backspace(c):
-                if len(self.current) > 0:
-                    self.current.pop()
+        elif is_escape(key):
+            self.reset()
 
-            elif is_escape(c):
-                self.reset()
+        elif not is_valid_key(key):
+            return
 
-            elif not is_valid_key(c):
-                continue
+        elif key == " ":
+            fill_spaces(len(self.current), self.current, self.text)
 
-            elif c == " ":
-                fill_spaces(len(self.current), self.current, self.text)
-
-            elif len(self.current) < len(self.text):
-                self.current.append(c)
-                if not self.started:
-                    self.started = True
+        elif len(self.current) < len(self.text):
+            self.current.append(key)
+            if not self.started:
+                self.started = True
 
     def switch_text(self, win) -> None:
         """Erase window, generate new text and print it into terminal."""
