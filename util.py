@@ -9,10 +9,6 @@ def is_backspace(key: str) -> bool:
     return key in ("KEY_BACKSPACE", "\b", "\x7f", curses.KEY_BACKSPACE, curses.KEY_DC)
 
 
-def is_arrow(key: str) -> bool:
-    return key in ("KEY_LEFT", "KEY_RIGHT", "KEY_UP", "KEY_DOWN")
-
-
 def is_resize(key: str) -> bool:
     return key == "KEY_RESIZE"
 
@@ -45,21 +41,21 @@ def is_null(key: str) -> bool:
     return key == ""
 
 
+def is_ctrl_r(key: str) -> bool:
+    return key == "\x12"
+
+
 def is_valid_key(key: str) -> bool:
     return not (
         is_backspace(key)
-        or is_arrow(key)
         or is_resize(key)
         or is_ignored_key(key)
         or is_enter(key)
         or is_tab(key)
         or is_escape(key)
         or is_null(key)
+        or is_ctrl_r(key)
     )
-
-
-def is_ctrl_r(key: str) -> bool:
-    return key == "\x12"
 
 
 def load_random_text(number_of_words: int) -> str:
@@ -111,16 +107,11 @@ def calculate_cpm(current: list["str"], start_time: float) -> float:
 
 
 def calculate_wpm(words: list["str"], start_time: float) -> float:
-    """Return typing speed in words per minute
-
+    """Return typing speed in words per minute.
     Args:
         words: List of words from sample text.
         start_time: The time when user starts typing the text in seconds.
-
-    Return:
-        Speed in words per minute.
     """
-
     time_taken = (time() - start_time) / 60
     return round(len(words) / time_taken, 1)
 
@@ -131,16 +122,20 @@ def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
     return round(correctly_typed / max(chars_typed, 1) * 100, 1)
 
 
-def readkey(win):
+def readkey(win) -> str:
+    """Read key from the user."""
     try:
         key = win.get_wch()
         if isinstance(key, int):
             if key in (curses.KEY_BACKSPACE, curses.KEY_DC):
                 return "KEY_BACKSPACE"
-            if key == curses.KEY_RESIZE:
+            elif key == curses.KEY_RESIZE:
                 return "KEY_RESIZE"
-        return key
+            else:
+                return ""
+        else:
+            return key
     except curses.error:
-        return ""  # null
+        return ""  # null string
     except KeyboardInterrupt:
         return "\x03"  # ctrl+c
