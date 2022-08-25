@@ -11,11 +11,11 @@ from util import (
     is_escape,
     is_ctrl_r,
     is_ctrl_c,
+    is_resize,
     fill_spaces,
     load_random_text,
     get_number_of_lines,
     word_wrap,
-    calculate_cpm,
     calculate_wpm,
     readkey,
     is_valid_key,
@@ -31,7 +31,7 @@ class Typer:
 
     def __init__(self):
         """Initialize the typer class."""
-        self.number_of_words = 2
+        self.number_of_words = 100
         self.text = load_random_text(self.number_of_words)
         self.current = []
         self.mistyped_chars = 0
@@ -54,19 +54,23 @@ class Typer:
         wrapper(self.main)
 
     def main(self, win) -> None:
+        """Most important stuff is happening here."""
         self.initialize(win)
 
         while True:
-            # TODO:
             first_key = readkey(win)
-            if not self.started:
-                if is_escape(first_key):  # or is_ctrl_c(first_key):
+
+            if is_ctrl_c(first_key):
+                sys.exit(0)
+
+            elif not self.started:
+                if is_escape(first_key):
                     sys.exit(0)
                 if is_ctrl_r(first_key) and self.mode == self.Mode.FIRST_PLAY:
                     self.switch_text(win)
 
             if self.mode == self.Mode.FIRST_PLAY:
-                self.start_typing_test(win, first_key)
+                self.typing_mode(win, first_key)
 
             elif self.mode == self.Mode.PLAY_AGAIN:
                 if is_tab(first_key):
@@ -101,7 +105,7 @@ class Typer:
         self.print_text(win)
 
     def print_text(self, win) -> None:
-        """Display target text, WPM, CPM, time elapsed since the beginning and
+        """Print target text, WPM, CPM, time elapsed since the beginning and
         the text that the user is currently writing."""
         win.erase()
 
@@ -128,51 +132,56 @@ class Typer:
 
         win.refresh()
 
-    def start_typing_test(self, win, key: str) -> None:
+    def typing_mode(self, win, key: str) -> None:
         if not self.started and is_valid_key(key):
             self.started = True
             self.start_time = time()
 
+        elif is_resize(key):
+            self.resize(win)
+
         elif not self.started:
             return
-
-        # TODO:
-        self.wpm = calculate_wpm("".join(self.current).split(), self.start_time)
-        # self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
 
         if self.current == []:
             # When user's text is empty; make sure to reset time.
             self.start_time = time()
 
+        self.handle_key(win, key)
+
+        # We compute AFTER processing the key.
+        self.wpm = calculate_wpm(("".join(self.current)).split(), self.start_time)
+        # self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
         self.print_text(win)
 
         if "".join(self.current) == self.text:
-            win.addstr(self.lines + 5, 0, "You've completed the text.\n")
-            win.addstr(self.lines + 6, 0, "TAB to play again.\n")
-            self.started = False
-            self.mode = self.Mode.PLAY_AGAIN
+            self.end_test(win)
             return
 
-        if is_escape(key) and not self.started:
-            sys.exit(0)
+    def handle_key(self, win, key: str) -> None:
+        if is_escape(key):
+            self.reset()
+
+        # Resizing a window while typing can bug text.
+        elif is_resize(key):
+            self.resize(win)
 
         elif is_backspace(key):
             if len(self.current) > 0:
                 self.current.pop()
 
-        elif is_escape(key):
-            self.reset()
-
-        elif not is_valid_key(key):
-            return
-
+        # TODO
         elif key == " ":
             fill_spaces(len(self.current), self.current, self.text)
 
-        elif len(self.current) < len(self.text):
+        elif is_valid_key(key):
             self.current.append(key)
-            if not self.started:
-                self.started = True
+
+    def end_test(self, win) -> None:
+        win.addstr(self.lines + 5, 0, "You've completed the text.\n")
+        win.addstr(self.lines + 6, 0, "TAB to play again.\n")
+        self.started = False
+        self.mode = self.Mode.PLAY_AGAIN
 
     def switch_text(self, win) -> None:
         """Erase window, generate new text and print it into terminal."""
@@ -195,6 +204,19 @@ class Typer:
         self.accuracy = 0
 
         self.mode = self.Mode.FIRST_PLAY
+
+    def resize(self, win) -> None:
+        """Handle window resizing."""
+        win.erase()
+
+        self.win_height, self.win_width = win.getmaxyx()
+        # Remove wrap from text so we can calculate it again correctly.
+        text_without_wrap = " ".join(self.text.split())
+        self.text = word_wrap(text_without_wrap, self.win_width)
+        self.lines = get_number_of_lines(self.text, self.win_width)
+
+        self.check_screen_size()
+        self.print_text(win)
 
     def check_screen_size(self) -> None:
         """Check if printed text can fit in terminal's window."""

@@ -46,6 +46,7 @@ def is_ctrl_r(key: str) -> bool:
 
 
 def is_valid_key(key: str) -> bool:
+    """Check if a key is 'valid' so that we can begin the typing test."""
     return not (
         is_backspace(key)
         or is_resize(key)
@@ -55,6 +56,7 @@ def is_valid_key(key: str) -> bool:
         or is_escape(key)
         or is_null(key)
         or is_ctrl_r(key)
+        or is_ctrl_c(key)
     )
 
 
@@ -69,7 +71,7 @@ def load_random_text(number_of_words: int) -> str:
 
 
 def fill_spaces(idx: int, current: list["str"], text: str) -> int:
-    """Fill current with spaces so that amount of spaces is matched with text"""
+    """Fill current with spaces so that amount of spaces is matched with text."""
     while idx < len(text) and text[idx] == " ":
         current.append(" ")
         idx += 1
@@ -77,7 +79,7 @@ def fill_spaces(idx: int, current: list["str"], text: str) -> int:
 
 
 def get_number_of_lines(text: str, win_width: int) -> int:
-    """return number of lines that fit on screen"""
+    """Return number of lines that fit on screen."""
     return int(ceil(len(text) / win_width))
 
 
@@ -117,7 +119,7 @@ def calculate_wpm(words: list["str"], start_time: float) -> float:
 
 
 def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
-    """Return accuracy as a % between 0 and 100"""
+    """Return accuracy as a % between 0 and 100."""
     correctly_typed = chars_typed - wrongly_typed
     return round(correctly_typed / max(chars_typed, 1) * 100, 1)
 
