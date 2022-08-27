@@ -105,11 +105,6 @@ def word_wrap(text: str, win_width: int) -> str:
     return text
 
 
-def calculate_cpm(current: list["str"], start_time: float) -> float:
-    time_taken = (time() - start_time) / 60
-    return round(len(current) / time_taken, 1)
-
-
 def calculate_wpm(words: list["str"], start_time: float) -> float:
     """Return typing speed in words per minute.
     Args:
