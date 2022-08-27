@@ -3,7 +3,7 @@ Practice Your typing speeds without leaving the terminal.
 
 Written in Python with curses library.
 
-<img src="./preview.gif" alt="Typer preview" width="50%" height="50%">
+<img src="./preview.gif" alt="Typer preview" width="100%" height="100%">
 
 ## Features
 - real-time error preview
