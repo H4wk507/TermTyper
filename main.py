@@ -26,20 +26,25 @@ class Typer:
     """Class for enclosing all things required to run the app."""
 
     class Mode:
-        FIRST_PLAY = 1
-        PLAY_AGAIN = 2
+        # Mode in which the user is when they didn't start typing or are already typing.
+        BEGIN_TEST = 1
+        # Mode in which the user is when they ended the typing test.
+        END_TEST = 2
 
-    def __init__(self):
+    def __init__(self, args):
         """Initialize the typer class."""
-        self.number_of_words = 100
-        self.text = load_random_text(self.number_of_words)
+        self.number_of_words = args.n
+        self.language = args.language
+
+        self.text = load_random_text(self.number_of_words, self.language)
         self.current = []
+
         self.mistyped_chars = 0
+
         self.started = False
         self.start_time = time()
 
         self.wpm = 0
-        self.cpm = 0
         self.accuracy = 0
 
         self.win_height = 0
@@ -48,7 +53,7 @@ class Typer:
 
         self.color = None
 
-        self.mode = self.Mode.FIRST_PLAY
+        self.mode = self.Mode.BEGIN_TEST
 
         os.environ.setdefault("ESCDELAY", "0")
         wrapper(self.main)
@@ -58,23 +63,25 @@ class Typer:
         self.initialize(win)
 
         while True:
-            first_key = readkey(win)
+            key = readkey(win)
 
-            if is_ctrl_c(first_key):
+            if is_ctrl_c(key):
                 sys.exit(0)
 
             elif not self.started:
-                if is_escape(first_key):
+                if is_escape(key):
                     sys.exit(0)
-                if is_ctrl_r(first_key) and self.mode == self.Mode.FIRST_PLAY:
+                if is_ctrl_r(key) and self.mode == self.Mode.BEGIN_TEST:
                     self.switch_text(win)
 
-            if self.mode == self.Mode.FIRST_PLAY:
-                self.typing_mode(win, first_key)
+            if self.mode == self.Mode.BEGIN_TEST:
+                self.typing_mode(win, key)
 
-            elif self.mode == self.Mode.PLAY_AGAIN:
-                if is_tab(first_key):
+            elif self.mode == self.Mode.END_TEST:
+                if is_tab(key):
                     self.switch_text(win)
+                elif is_resize(key):
+                    self.resize(win)
 
     def initialize(self, win) -> None:
         """Initialize initial state of the curses interface."""
@@ -84,17 +91,15 @@ class Typer:
 
         self.check_screen_size()
 
-        curses.init_color(1, 1000, 1000, 1000)
-        curses.init_color(2, 1000, 0, 0)
-
-        curses.init_pair(1, 1, curses.COLOR_BLACK)
-        curses.init_pair(2, 1, 2)
-
         class Color:
             """Helper Color class (something like enum)"""
 
-            WHITE_BOLD = curses.color_pair(1) | curses.A_BOLD
-            WHITE_DIM = curses.color_pair(1) | curses.A_DIM
+            curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
+            curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_RED)
+
+            WHITE = curses.color_pair(1)
+            WHITE_BOLD = WHITE | curses.A_BOLD
+            WHITE_DIM = WHITE | curses.A_DIM
             RED = curses.color_pair(2)
 
         self.color = Color
@@ -110,13 +115,17 @@ class Typer:
         win.erase()
 
         win.addstr(self.text, self.color.WHITE_BOLD)
-        win.addstr(self.lines + 1, 0, "esc quit")
+        win.addstr(self.lines + 1, 0, "ESC restart/quit")
         if not self.started:
-            win.addstr(self.lines + 1, 8, " | ctrl+r generate new text.")
+            win.addstr(self.lines + 1, 16, " | CTRL+R generate new text")
 
-        win.addstr(self.lines + 2, 0, f"WPM: {self.wpm}")
-        win.addstr(self.lines + 3, 0, f"accuracy: {self.accuracy}")
-        win.addstr(self.lines + 4, 0, f"time: {round(time() - self.start_time, 2)}s")
+        win.addstr(self.lines + 2, 0, "")
+        win.addstr(self.lines + 3, 0, f"[{self.number_of_words} words]")
+        win.addstr(
+            self.lines + 4, 0, f"time elapsed: {round(time() - self.start_time, 2)}s"
+        )
+        win.addstr(self.lines + 5, 0, f"WPM: {self.wpm}")
+
         win.move(0, 0)
 
         line = 0
@@ -125,7 +134,6 @@ class Typer:
                 win.addstr(line, i % self.win_width, self.text[i], self.color.WHITE_DIM)
             else:
                 win.addstr(line, i % self.win_width, self.text[i], self.color.RED)
-                self.mistyped_chars += 1
 
             if i % self.win_width == self.win_width - 1:
                 line += 1
@@ -144,14 +152,15 @@ class Typer:
             return
 
         if self.current == []:
-            # When user's text is empty; make sure to reset time.
+            # When user's text is empty; make sure to reset time and mistyped words.
             self.start_time = time()
+            self.mistyped_chars = 0
 
         self.handle_key(win, key)
 
         # We compute AFTER processing the key.
-        self.wpm = calculate_wpm(("".join(self.current)).split(), self.start_time)
-        # self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
+        list_of_words = ("".join(self.current)).split()
+        self.wpm = calculate_wpm(list_of_words, self.start_time)
         self.print_text(win)
 
         if "".join(self.current) == self.text:
@@ -170,23 +179,35 @@ class Typer:
             if len(self.current) > 0:
                 self.current.pop()
 
-        # TODO
+        # TODO: Something smarter.
         elif key == " ":
             fill_spaces(len(self.current), self.current, self.text)
+            if (
+                len(self.current) > 0
+                and self.current[-1] != self.text[len(self.current) - 1]
+            ):
+                self.mistyped_chars += 1
 
         elif is_valid_key(key):
-            self.current.append(key)
+            if len(self.current) < len(self.text):
+                self.current.append(key)
+                if self.current[-1] != self.text[len(self.current) - 1]:
+                    self.mistyped_chars += 1
 
     def end_test(self, win) -> None:
-        win.addstr(self.lines + 5, 0, "You've completed the text.\n")
-        win.addstr(self.lines + 6, 0, "TAB to play again.\n")
+        self.accuracy = calculate_accuracy(len(self.current), self.mistyped_chars)
         self.started = False
-        self.mode = self.Mode.PLAY_AGAIN
+        self.mode = self.Mode.END_TEST
+
+        win.addstr(self.lines + 6, 0, f"accuracy: {self.accuracy}%")
+        win.addstr(self.lines + 7, 0, "")
+        win.addstr(self.lines + 8, 0, "You have completed the text.")
+        win.addstr(self.lines + 9, 0, "press TAB to play again.")
 
     def switch_text(self, win) -> None:
         """Erase window, generate new text and print it into terminal."""
         win.erase()
-        self.text = load_random_text(self.number_of_words)
+        self.text = load_random_text(self.number_of_words, self.language)
         self.text = word_wrap(self.text, self.win_width)
         self.lines = get_number_of_lines(self.text, self.win_width)
         self.reset()
@@ -195,15 +216,16 @@ class Typer:
     def reset(self) -> None:
         """Reset options."""
         self.current = []
+
         self.mistyped_chars = 0
+
         self.started = False
         self.start_time = time()
 
         self.wpm = 0
-        self.cpm = 0
         self.accuracy = 0
 
-        self.mode = self.Mode.FIRST_PLAY
+        self.mode = self.Mode.BEGIN_TEST
 
     def resize(self, win) -> None:
         """Handle window resizing."""
@@ -218,9 +240,12 @@ class Typer:
         self.check_screen_size()
         self.print_text(win)
 
+        if self.mode == self.Mode.END_TEST:
+            self.end_test(win)
+
     def check_screen_size(self) -> None:
         """Check if printed text can fit in terminal's window."""
-        if self.lines + 6 >= self.win_height:
+        if self.lines + 9 >= self.win_height:
             exit(
                 "The terminal's window is too small to print the text. Try resizing it."
             )

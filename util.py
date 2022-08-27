@@ -60,9 +60,9 @@ def is_valid_key(key: str) -> bool:
     )
 
 
-def load_random_text(number_of_words: int) -> str:
+def load_random_text(number_of_words: int, language: str) -> str:
     """Load random text from json file."""
-    with open("words.json") as f:
+    with open(f"./words/{language}_words.json") as f:
         dat = json.load(f)
 
     wordlist = dat["words"]
@@ -72,10 +72,12 @@ def load_random_text(number_of_words: int) -> str:
 
 def fill_spaces(idx: int, current: list["str"], text: str) -> int:
     """Fill current with spaces so that amount of spaces is matched with text."""
+    spaces = 0
     while idx < len(text) and text[idx] == " ":
         current.append(" ")
         idx += 1
-    return idx
+        spaces += 1
+    return spaces
 
 
 def get_number_of_lines(text: str, win_width: int) -> int:
@@ -120,8 +122,9 @@ def calculate_wpm(words: list["str"], start_time: float) -> float:
 
 def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
     """Return accuracy as a % between 0 and 100."""
-    correctly_typed = chars_typed - wrongly_typed
-    return round(correctly_typed / max(chars_typed, 1) * 100, 1)
+    correctly_typed = max(chars_typed - wrongly_typed, 0)
+    chars_typed = max(chars_typed, 1)  # Avoid division by 0.
+    return round(correctly_typed / chars_typed * 100, 1)
 
 
 def readkey(win) -> str:
