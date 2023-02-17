@@ -1,8 +1,14 @@
-from main import Typer
 import argparse
+import os
+import sys
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Typer commandline arguments.")
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from termtyper.typer import Typer
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "-n",
         type=int,
@@ -19,3 +25,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     Typer(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,51 +1,59 @@
 import curses
 import json
-from random import sample
+import os
 from math import ceil
+from random import sample
 from time import time
+from typing import Any
 
 
-def is_backspace(key: str) -> bool:
-    return key in ("KEY_BACKSPACE", "\b", "\x7f", curses.KEY_BACKSPACE, curses.KEY_DC)
+def is_backspace(key: str | int) -> bool:
+    return key in (
+        "KEY_BACKSPACE",
+        "\b",
+        "\x7f",
+        curses.KEY_BACKSPACE,
+        curses.KEY_DC,
+    )
 
 
-def is_resize(key: str) -> bool:
+def is_resize(key: str | int) -> bool:
     return key == "KEY_RESIZE"
 
 
-def is_ignored_key(key: str) -> bool:
+def is_ignored_key(key: str | int) -> bool:
     return isinstance(key, int)
 
 
-def is_enter(key: str) -> bool:
+def is_enter(key: str | int) -> bool:
     return key == "\n"
 
 
-def is_tab(key: str) -> bool:
+def is_tab(key: str | int) -> bool:
     return key == "\t"
 
 
-def is_ctrl_c(key: str) -> bool:
+def is_ctrl_c(key: str | int) -> bool:
     return key == "\x03"
 
 
-def is_escape(key: str) -> bool:
+def is_escape(key: str | int) -> bool:
     if isinstance(key, str) and len(key) == 1:
-        return ord(key) == curses.ascii.ESC
+        return ord(key) == curses.ascii.ESC  # type: ignore
     return False
 
 
-def is_null(key: str) -> bool:
+def is_null(key: str | int) -> bool:
     if isinstance(key, str) and len(key) == 1:
         return ord(key) == 0
     return key == ""
 
 
-def is_ctrl_r(key: str) -> bool:
+def is_ctrl_r(key: str | int) -> bool:
     return key == "\x12"
 
 
-def is_valid_key(key: str) -> bool:
+def is_valid_key(key: str | int) -> bool:
     """Check if a key is 'valid' so that we can begin the typing test."""
     return not (
         is_backspace(key)
@@ -62,7 +70,8 @@ def is_valid_key(key: str) -> bool:
 
 def load_random_text(number_of_words: int, language: str) -> str:
     """Load random text from json file."""
-    with open(f"./words/{language}_words.json") as f:
+    directory = os.path.dirname(os.path.abspath(__file__))
+    with open(f"{directory}/words/{language}_words.json") as f:
         dat = json.load(f)
 
     wordlist = dat["words"]
@@ -71,7 +80,8 @@ def load_random_text(number_of_words: int, language: str) -> str:
 
 
 def fill_spaces(idx: int, current: list["str"], text: str) -> int:
-    """Fill current with spaces so that amount of spaces is matched with text."""
+    """Fill current with spaces so that amount of spaces
+    is matched with text."""
     spaces = 0
     while idx < len(text) and text[idx] == " ":
         current.append(" ")
@@ -122,19 +132,17 @@ def calculate_accuracy(chars_typed: int, wrongly_typed: int) -> float:
     return round(correctly_typed / chars_typed * 100, 1)
 
 
-def readkey(win) -> str:
+def readkey(win: Any) -> str:
     """Read key from the user."""
     try:
-        key = win.get_wch()
+        key: str = win.get_wch()
         if isinstance(key, int):
             if key in (curses.KEY_BACKSPACE, curses.KEY_DC):
                 return "KEY_BACKSPACE"
-            elif key == curses.KEY_RESIZE:
+            if key == curses.KEY_RESIZE:
                 return "KEY_RESIZE"
-            else:
-                return ""
-        else:
-            return key
+            return ""
+        return key
     except curses.error:
         return ""  # null string
     except KeyboardInterrupt:
